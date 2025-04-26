@@ -13,10 +13,18 @@ jQuery(async () => {
     let trackIntervalId = null;
     let entityNameMap = {}; // 实体ID到名称的映射
 
+    if (typeof window.extension_settings === 'undefined') {
+        window.extension_settings = {};
+    }
+    
     // 初始化插件设置
-    if (!extension_settings[pluginName]) {
-        extension_settings[pluginName] = {};
-        saveSettingsDebounced();
+    if (!window.extension_settings[pluginName]) {
+        window.extension_settings[pluginName] = {};
+        
+        // 如果 saveSettingsDebounced 函数存在，则保存设置
+        if (typeof window.saveSettingsDebounced === 'function') {
+            window.saveSettingsDebounced();
+        }
     }
 
     // 辅助函数 - 获取北京时间日期字符串 (YYYY-MM-DD)
