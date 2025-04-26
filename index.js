@@ -3,7 +3,7 @@ import { eventSource, event_types } from '../../../../script.js';
 import { renderExtensionTemplateAsync } from "../../../script.js";
 
 const pluginName = 'time-UI-1';
-const pluginId = 'your-stats-plugin-id'; // *** 必须与服务器插件 ID 一致 ***
+const pluginId = 'daily-usage-tracker'; // *** 必须与服务器插件 ID 一致 ***
 const serverApiBase = `/api/plugins/${pluginId}`;
 
 // --- 全局变量 (插件作用域内) ---
