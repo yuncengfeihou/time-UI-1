@@ -1,0 +1,31 @@
+#stats-plugin-container {
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    margin-top: 10px;
+    background-color: var(--background-color-content); /* 使用主题变量 */
+}
+#stats-plugin-container h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+#stats-display-area {
+    margin-top: 10px;
+    max-height: 300px; /* 控制最大高度，超出滚动 */
+    overflow-y: auto;
+}
+#stats-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+#stats-table th, #stats-table td {
+    border: 1px solid var(--border-color);
+    padding: 5px;
+    text-align: left;
+}
+#stats-table th {
+    background-color: var(--background-color-list-header); /* 使用主题变量 */
+}
+#stats-datepicker {
+    margin-right: 5px;
+}
