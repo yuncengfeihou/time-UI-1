@@ -1,25 +1,33 @@
-<div id="stats-plugin-container" class="container">
-    <h4>聊天统计 (北京时间)</h4>
-    <div>
-        <label for="stats-datepicker">选择日期:</label>
-        <input type="date" id="stats-datepicker">
-        <button id="stats-refresh-button" class="menu_button">刷新</button>
+<div id="daily-usage-tracker-container" class="inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+        <b>每日使用追踪器 (按北京时间)</b>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
     </div>
-    <div id="stats-display-area">
-        <p>正在加载统计数据...</p>
-        <!-- 统计数据将在这里显示，例如使用表格 -->
-        <table id="stats-table">
-            <thead>
-                <tr>
-                    <th>角色/群组</th>
-                    <th>聊天时长</th>
-                    <th>消息数</th>
-                    <th>字数</th>
-                </tr>
-            </thead>
-            <tbody>
-                <!-- 数据行 -->
-            </tbody>
-        </table>
+    <div class="inline-drawer-content">
+        <div class="usage-controls">
+            <label for="usage-datepicker">选择日期:</label>
+            <input type="date" id="usage-datepicker" class="text_pole">
+            <button id="usage-refresh-button" class="menu_button fa-solid fa-arrows-rotate" title="刷新"></button>
+        </div>
+        <div id="usage-stats-display-area" class="usage-stats-display">
+            <p id="usage-loading-message">正在加载...</p>
+            <table id="usage-stats-table" class="usage-stats-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>角色/群组</th>
+                        <th>活跃时长</th>
+                        <th>你 (条)</th>
+                        <th>你 (字)</th>
+                        <th>对方 (条)</th>
+                        <th>对方 (字)</th>
+                        <th>总计 (条)</th>
+                        <th>总计 (字)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 统计数据行将动态插入这里 -->
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
