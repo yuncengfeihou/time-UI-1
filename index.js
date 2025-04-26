@@ -5,7 +5,6 @@ import {
     getCurrentChatId,      // May not be needed if getContext provides enough
     eventSource,
     // event_types, // Use the camelCase version below
-    t,                     // For potential future i18n
     messageFormatting,     // Not used here, but example import
     getRequestHeaders,     // CRUCIAL for API calls
     getContext,            // CRUCIAL for getting context
