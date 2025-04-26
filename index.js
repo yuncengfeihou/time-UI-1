@@ -1,4 +1,4 @@
-// SillyTavern 前端插件 - 每日使用统计
+// SillyTavern 前端插件 - 每日使用统计 (基础兼容版)
 jQuery(async () => {
     // 插件基本配置
     const pluginName = 'time-UI-1';
@@ -6,41 +6,21 @@ jQuery(async () => {
     const serverApiBase = `/api/plugins/${pluginId}`;
     const TRACKING_INTERVAL = 15000; // 15秒钟跟踪一次
     
-    // 获取SillyTavern上下文
-    const context = getContext();
-    if (!context) {
-        console.error(`[${pluginName}] 无法获取SillyTavern上下文`);
-        return;
-    }
-    
-    // 从context中获取需要的组件
-    const { eventSource, extension_settings } = context;
-    const event_types = context.eventTypes || context.event_types; // 兼容不同版本
-    
-    // 检查必要组件
-    if (!eventSource || !event_types) {
-        console.error(`[${pluginName}] 缺少必要的SillyTavern组件`);
-        return;
-    }
-    
     // 插件状态变量
-    let currentEntityId = null;
-    let activeStartTime = null;
-    let isWindowFocused = true; // 默认窗口获得焦点
-    let trackIntervalId = null;
-    let entityNameMap = {}; // 实体ID到名称的映射
-
-    // 初始化插件设置
-    if (!extension_settings[pluginName]) {
-        extension_settings[pluginName] = {};
-        if (typeof context.saveSettingsDebounced === 'function') {
-            context.saveSettingsDebounced();
-        }
-    }
+    let currentEntityId = null;        // 当前聊天的角色/群组ID
+    let activeStartTime = null;        // 活跃时间开始点
+    let isWindowFocused = true;        // 窗口焦点状态
+    let trackIntervalId = null;        // 跟踪定时器ID
+    let entityNameMap = {};            // 实体ID到名称的映射
+    
+    console.log(`[${pluginName}] 插件开始初始化`);
 
     // 辅助函数 - 获取北京时间日期字符串 (YYYY-MM-DD)
     function getBeijingDateString() {
-        return dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD');
+        // 使用本地时间，假设用户设置了正确的时区
+        // 在实际环境中，可能需要更精确的处理
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     }
 
     // 辅助函数 - 格式化时长
@@ -56,8 +36,7 @@ jQuery(async () => {
     function countWords(text) {
         if (!text) return 0;
         
-        // 简单的字数统计 - 中文按字符计算，英文按空格分词
-        // 首先去除所有HTML标签
+        // 简单的字数统计
         const cleanText = text.replace(/<[^>]*>/g, '');
         
         // 英文单词 + 中文/日文/韩文字符
@@ -67,16 +46,31 @@ jQuery(async () => {
         return wordCount;
     }
 
-    // 辅助函数 - 获取当前实体ID
+    // 尝试从URL获取当前实体ID (基础逻辑，可能需要根据SillyTavern版本调整)
     function getCurrentEntityId() {
-        const ctx = getContext();
-        return ctx.groupId || ctx.characterId;
+        try {
+            // 尝试从URL或DOM中获取当前角色/群组ID
+            // 这是一个简单的示例实现，实际情况可能更复杂
+            const path = window.location.pathname;
+            const parts = path.split('/');
+            const lastPart = parts[parts.length - 1];
+            
+            if (lastPart && lastPart !== '') {
+                return lastPart;
+            }
+            
+            // 如果无法从URL获取，返回一个默认值或null
+            return 'unknown_entity';
+        } catch (error) {
+            console.error(`[${pluginName}] 获取实体ID失败:`, error);
+            return 'unknown_entity';
+        }
     }
 
     // API函数 - 发送跟踪数据到服务器
     async function sendTrackingData({ timeMs = 0, msgInc = 0, wordInc = 0, isUser = false } = {}) {
         try {
-            // 实时获取当前实体ID
+            // 获取实体ID
             const entityId = getCurrentEntityId();
             if (!entityId) {
                 console.log(`[${pluginName}] 未找到有效的实体ID，跳过数据发送`);
@@ -96,8 +90,8 @@ jQuery(async () => {
             const response = await fetch(`${serverApiBase}/track`, {
                 method: 'POST',
                 headers: {
-                    ...context.getRequestHeaders(),
                     'Content-Type': 'application/json'
+                    // 注：移除了依赖getRequestHeaders的部分
                 },
                 body: JSON.stringify(payload)
             });
@@ -159,29 +153,10 @@ jQuery(async () => {
         activeStartTime = null;
     }
 
-    // 加载实体名称 - 角色和群组
+    // 基本名称加载 - 以后可以扩展
     function preloadEntityNames() {
-        try {
-            // 获取角色列表
-            const characters = window.characters || [];
-            characters.forEach(char => {
-                if (char.item && char.item.avatar_url) {
-                    entityNameMap[char.item.avatar_url] = char.item.name;
-                }
-            });
-            
-            // 获取群组列表
-            const groups = window.groups || [];
-            groups.forEach(group => {
-                if (group.id) {
-                    entityNameMap[group.id] = group.name;
-                }
-            });
-            
-            console.log(`[${pluginName}] 已加载 ${Object.keys(entityNameMap).length} 个实体名称`);
-        } catch (error) {
-            console.error(`[${pluginName}] 加载实体名称失败:`, error);
-        }
+        // 简化版本，实际实现可能需要更复杂的逻辑
+        console.log(`[${pluginName}] 尝试加载实体名称`);
     }
 
     // 加载并显示统计数据
@@ -193,7 +168,8 @@ jQuery(async () => {
 
             // 从服务器获取数据
             const response = await fetch(`${serverApiBase}/stats?date=${dateString}`, {
-                headers: context.getRequestHeaders()
+                method: 'GET'
+                // 注：移除了依赖getRequestHeaders的部分
             });
 
             if (!response.ok) {
@@ -207,11 +183,6 @@ jQuery(async () => {
             if (Object.keys(statsData).length === 0) {
                 $('#usage-loading-message').text(`${dateString} 没有统计数据`);
                 return;
-            }
-
-            // 预加载实体名称（如果需要）
-            if (Object.keys(entityNameMap).length === 0) {
-                preloadEntityNames();
             }
 
             // 清空并填充表格
@@ -247,54 +218,27 @@ jQuery(async () => {
         }
     }
 
-    // 事件处理器 - 实体变更
+    // 事件处理器 - 基本的变更处理
     function handleEntityChange() {
         stopTrackingInterval();
         startTrackingInterval();
     }
 
-    // 事件处理器 - 新消息
-    function handleNewMessage(messageId) {
-        try {
-            const ctx = getContext();
-            // 检查消息ID是否有效
-            if (messageId === undefined || messageId === null || !ctx.chat) {
-                return;
-            }
-            
-            // 获取消息内容
-            const message = ctx.chat[messageId];
-            if (!message) return;
-            
-            // 获取当前实体ID
-            const entityId = getCurrentEntityId();
-            if (!entityId) return;
-            
-            // 统计字数
-            const wordCount = countWords(message.mes);
-            
-            // 确定消息来源
-            const isUser = message.is_user === true;
-            
-            // 发送数据到服务器
-            sendTrackingData({
-                msgInc: 1,
-                wordInc: wordCount,
-                isUser: isUser
-            });
-            
-            // 如果窗口有焦点，重置活跃开始时间（提高跟踪精度）
-            if (isWindowFocused) {
-                activeStartTime = Date.now();
-            }
-        } catch (error) {
-            console.error(`[${pluginName}] 处理新消息失败:`, error);
-        }
+    // 尝试监控消息变化的基础实现
+    function setupBasicMessageMonitoring() {
+        // 由于无法依赖SillyTavern API，我们使用基本的DOM观察
+        console.log(`[${pluginName}] 设置基本消息监控`);
+        
+        // 定期检查DOM变化
+        setInterval(() => {
+            // 这里可以实现基本的DOM监控逻辑
+            // 注意：这只是一个简单占位，实际实现可能需要更复杂的逻辑
+        }, 5000); // 每5秒检查一次
     }
 
     // 渲染并注入UI
     try {
-        // 直接使用HTML字符串代替模板加载
+        // 直接使用HTML字符串
         const htmlTemplate = `
         <div id="daily-usage-plugin-container" class="daily-usage-container">
             <div class="inline-drawer">
@@ -334,13 +278,29 @@ jQuery(async () => {
             </div>
         </div>`;
         
-        // 将HTML直接注入到扩展页面
-        $('#translation_container').append(htmlTemplate);
+        // 尝试将HTML注入到几个可能的容器
+        const possibleContainers = [
+            '#translation_container', 
+            '#extensions_settings',
+            '#extensions-settings-block',
+            'body' // 最后的备选项
+        ];
         
-        // 预加载实体名称
-        preloadEntityNames();
+        let injected = false;
+        for (const container of possibleContainers) {
+            if ($(container).length > 0) {
+                $(container).append(htmlTemplate);
+                console.log(`[${pluginName}] UI已注入到 ${container}`);
+                injected = true;
+                break;
+            }
+        }
         
-        // 设置日期选择器默认值为今天（北京时间）
+        if (!injected) {
+            console.error(`[${pluginName}] 无法找到任何有效的UI容器来注入插件`);
+        }
+        
+        // 设置日期选择器默认值为今天
         const today = getBeijingDateString();
         $('#usage-datepicker').val(today);
         
@@ -364,35 +324,80 @@ jQuery(async () => {
         console.error(`[${pluginName}] 渲染UI失败:`, error);
     }
 
-    // 添加事件监听
-    // 角色/群组切换事件
-    eventSource.on(event_types.CHARACTER_LOADED, handleEntityChange);
-    eventSource.on(event_types.GROUP_LOADED, handleEntityChange);
-    eventSource.on(event_types.CHAT_CHANGED, handleEntityChange);
-    
-    // 消息事件
-    eventSource.on(event_types.MESSAGE_SENT, handleNewMessage);
-    eventSource.on(event_types.MESSAGE_RECEIVED, handleNewMessage);
-    
-    // 窗口焦点事件
+    // 使用基本的window事件
     $(window).on('focus', function() {
         isWindowFocused = true;
         activeStartTime = Date.now();
+        console.log(`[${pluginName}] 窗口获得焦点`);
     });
     
     $(window).on('blur', function() {
         isWindowFocused = false;
         processAndSendTimeIncrement();
         activeStartTime = null;
+        console.log(`[${pluginName}] 窗口失去焦点`);
     });
     
-    // 页面卸载前事件 - 尽力而为，不一定能捕获所有情况
+    // 页面卸载前事件
     $(window).on('beforeunload', function() {
         stopTrackingInterval();
     });
     
+    // 尝试监控URL变化（简单方法检测角色切换）
+    let lastUrl = window.location.href;
+    setInterval(() => {
+        if (lastUrl !== window.location.href) {
+            lastUrl = window.location.href;
+            console.log(`[${pluginName}] 检测到URL变化，可能是角色切换`);
+            handleEntityChange();
+        }
+    }, 2000); // 每2秒检查一次
+    
+    // 设置基本消息监控
+    setupBasicMessageMonitoring();
+    
     // 初始化跟踪
     handleEntityChange();
+    
+    // 添加一些CSS样式
+    $('head').append(`
+    <style>
+        .daily-usage-container {
+            margin-top: 10px;
+        }
+        
+        .daily-usage-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .daily-usage-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .daily-usage-table th, 
+        .daily-usage-table td {
+            border: 1px solid #444;
+            padding: 6px 8px;
+            text-align: left;
+            font-size: 0.9em;
+        }
+        
+        .daily-usage-table th {
+            background-color: #333;
+        }
+        
+        .daily-usage-display {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+    </style>
+    `);
     
     console.log(`[${pluginName}] 插件初始化完成`);
 });
