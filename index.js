@@ -54,7 +54,7 @@ const getClientBeijingDateString = () => {
 
 
 jQuery(async () => {
-    const pluginName = 'DailyUsageTrackerUI'; // For logging
+    const pluginName = 'time-UI-1'; // For logging
     const pluginId = 'daily-usage-tracker';   // MUST match server plugin ID
     const serverApiBase = `/api/plugins/${pluginId}`;
     const TRACKING_INTERVAL_MS = 15 * 1000; // Send time update every 15 seconds
