@@ -39,7 +39,7 @@ const getClientBeijingDateString = () => {
              return window.dayjs().tz("Asia/Shanghai").format('YYYY-MM-DD');
         }
     } catch (e) {
-       console.warn('[DailyUsageTrackerUI] Failed to use global dayjs. Falling back to basic Date object.');
+       console.warn('[time-UI-1] Failed to use global dayjs. Falling back to basic Date object.');
     }
     // Fallback using basic Date object (less reliable for timezones but works for date part)
     const now = new Date();
@@ -375,7 +375,7 @@ jQuery(async () => {
     // --- Initialization Flow ---
     try {
         // 1. Load and inject the UI template
-        const pluginFolderName = 'DailyUsageTrackerUI'; // 使用你的前端插件文件夹名
+        const pluginFolderName = 'time-UI-1'; // 使用你的前端插件文件夹名
         const uiHtml = await renderExtensionTemplateAsync(`third-party/${pluginFolderName}`, 'ui');
         // Inject into the standard extensions settings area
         $('#extensions_settings').append(uiHtml); // Or use '#translation_container' if that's the target in your ST version
