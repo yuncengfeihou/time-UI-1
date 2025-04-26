@@ -1,34 +1,58 @@
-.daily-usage-container {
-    margin-top: 10px;
+/* SillyTavern/public/extensions/third-party/time-UI-1/style.css */
+.daily-usage-tracker-container .inline-drawer-content {
+    padding: 10px;
 }
 
-.daily-usage-header {
+.usage-controls {
+    margin-bottom: 15px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
+    gap: 8px; /* 元素间距 */
 }
 
-.daily-usage-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-}
-
-.daily-usage-table th, 
-.daily-usage-table td {
-    border: 1px solid var(--border-color);
-    padding: 6px 8px;
-    text-align: left;
-    font-size: 0.9em;
-}
-
-.daily-usage-table th {
-    background-color: var(--background-color-secondary);
-}
-
-.daily-usage-display {
-    max-height: 300px;
+.usage-display-area {
+    max-height: 400px; /* 限制最大高度，出现滚动条 */
     overflow-y: auto;
+    border: 1px solid var(--border-color); /* 添加边框 */
     margin-top: 10px;
+}
+
+.usage-stats-table {
+    width: 100%;
+    border-collapse: collapse; /* 合并边框 */
+    font-size: 0.9em; /* 稍小字体 */
+}
+
+.usage-stats-table th,
+.usage-stats-table td {
+    border: 1px solid var(--border-color); /* 单元格边框 */
+    padding: 5px 8px; /* 内边距 */
+    text-align: left; /* 文本左对齐 */
+    white-space: nowrap; /* 防止文本换行 */
+}
+
+.usage-stats-table th {
+    background-color: var(--background-color-hightlight); /* 表头背景色 */
+    position: sticky; /* 表头吸顶 */
+    top: 0;
+    z-index: 1;
+}
+
+.usage-stats-table tbody tr:hover {
+    background-color: var(--background-color-secondary); /* 悬停高亮 */
+}
+
+.usage-stats-table tfoot td {
+     background-color: var(--background-color-hightlight); /* 页脚背景色 */
+     border-top: 2px solid var(--border-color); /* 页脚上边框加粗 */
+}
+
+#usage-status.loading::after {
+    content: ' 加载中...';
+    font-style: italic;
+    color: var(--text-color-secondary);
+}
+#usage-status.error {
+    color: var(--error-color);
+    font-weight: bold;
 }
