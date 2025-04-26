@@ -9,11 +9,10 @@ import {
     // 检查你的 SillyTavern 版本或 context.eventTypes 来确认
     // 此处我们假设 event_types 是正确的
     event_types,
-    t, // 翻译函数 (可选)
     messageFormatting, // 消息格式化 (此插件不需要)
     getRequestHeaders, // **非常重要** 用于获取 API 请求头 (CSRF token)
-    getCharacterList, // 获取角色列表 (如果可用)
-    getGroupList, // 获取群组列表 (如果可用)
+    getCharacters, // 获取角色列表 (如果可用)
+    getGroups, // 获取群组列表 (如果可用)
 } from '../../../../script.js'; // 路径相对于 public/index.html
 
 // 导入扩展助手
@@ -311,9 +310,9 @@ jQuery(async () => {
          try {
             const context = getContext(); // 获取当前上下文
 
-            // 方式一：尝试使用 getCharacterList/getGroupList (如果 ST 提供且可用)
-            if (typeof getCharacterList === 'function') {
-                const characters = await getCharacterList(); // 假设它返回 [{id: ..., name: ...}, ...]
+            // 方式一：尝试使用 getCharacters/getGroups (如果 ST 提供且可用)
+            if (typeof getCharacters === 'function') {
+                const characters = await getCharacters(); // 假设它返回 [{id: ..., name: ...}, ...]
                  if (Array.isArray(characters)) {
                      characters.forEach(char => { if (char.id && char.name) entityNameMap[char.id] = char.name; });
                  }
@@ -322,8 +321,8 @@ jQuery(async () => {
                  context.characters.forEach(char => { if (char.id && char.name) entityNameMap[char.id] = char.name; });
             }
 
-            if (typeof getGroupList === 'function') {
-                const groups = await getGroupList(); // 假设它返回 [{id: ..., name: ...}, ...]
+            if (typeof getGroups === 'function') {
+                const groups = await getGroups(); // 假设它返回 [{id: ..., name: ...}, ...]
                  if (Array.isArray(groups)) {
                     groups.forEach(group => { if (group.id && group.name) entityNameMap[group.id] = group.name; });
                  }
