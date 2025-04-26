@@ -1,59 +1,34 @@
-#daily-usage-tracker-container .inline-drawer-content {
-    padding: 10px;
+.daily-usage-container {
+    margin-top: 10px;
 }
 
-.usage-controls {
-    margin-bottom: 10px;
+.daily-usage-header {
     display: flex;
     align-items: center;
-    gap: 8px; /* 控件之间的间距 */
+    justify-content: space-between;
+    margin-bottom: 10px;
 }
 
-.usage-stats-display {
-    max-height: 400px; /* 限制最大高度，出现滚动条 */
+.daily-usage-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.daily-usage-table th, 
+.daily-usage-table td {
+    border: 1px solid var(--border-color);
+    padding: 6px 8px;
+    text-align: left;
+    font-size: 0.9em;
+}
+
+.daily-usage-table th {
+    background-color: var(--background-color-secondary);
+}
+
+.daily-usage-display {
+    max-height: 300px;
     overflow-y: auto;
     margin-top: 10px;
-    border: 1px solid var(--border-color); /* 添加边框以便区分 */
-    border-radius: 4px;
-}
-
-.usage-stats-table {
-    width: 100%;
-    border-collapse: collapse; /* 合并边框 */
-    font-size: 0.9em; /* 稍小字体 */
-}
-
-.usage-stats-table th,
-.usage-stats-table td {
-    border: 1px solid var(--border-color);
-    padding: 5px 8px; /* 调整内边距 */
-    text-align: left;
-    vertical-align: top; /* 垂直顶部对齐 */
-    word-break: break-word; /* 防止长名称撑开 */
-}
-
-.usage-stats-table th {
-    background-color: var(--background-color-hightlight); /* 表头背景色 */
-    position: sticky; /* 表头吸顶 */
-    top: 0;
-    z-index: 1; /* 确保表头在滚动时在上方 */
-}
-
-/* 交替行颜色，可选 */
-.usage-stats-table tbody tr:nth-child(odd) {
-    background-color: var(--background-color);
-}
-.usage-stats-table tbody tr:nth-child(even) {
-    background-color: var(--background-color-darker); /* 稍深一点的背景 */
-}
-
-#usage-loading-message {
-    padding: 15px;
-    text-align: center;
-    color: var(--text-color-secondary);
-}
-
-/* 按钮样式微调 */
-#usage-refresh-button {
-    padding: 5px 8px;
 }
