@@ -24,7 +24,7 @@ import {
 // 导入扩展助手
 import {
         getGroups, // 获取群组列表
-} from '../../../group-chat.js';
+} from '../../../group-chats.js';
 
 // 导入工具函数 (可选，如有需要)
 import {
