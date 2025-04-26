@@ -11,8 +11,7 @@ import {
     event_types,
     messageFormatting, // 消息格式化 (此插件不需要)
     getRequestHeaders, // **非常重要** 用于获取 API 请求头 (CSRF token)
-    getCharacters, // 获取角色列表 (如果可用)
-    getGroups, // 获取群组列表 (如果可用)
+    getCharacters, // 获取角色列表
 } from '../../../../script.js'; // 路径相对于 public/index.html
 
 // 导入扩展助手
@@ -21,6 +20,11 @@ import {
     renderExtensionTemplateAsync,
     extension_settings, // 全局插件设置对象 (此插件主要用于读取 entity 名称，不写入)
 } from '../../../extensions.js';
+
+// 导入扩展助手
+import {
+        getGroups, // 获取群组列表
+} from '../../../group-chat.js';
 
 // 导入工具函数 (可选，如有需要)
 import {
