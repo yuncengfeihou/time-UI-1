@@ -1,37 +1,47 @@
-<div id="daily-usage-plugin-container" class="daily-usage-container">
-    <div class="inline-drawer">
-        <div class="inline-drawer-toggle inline-drawer-header">
-            <b>每日使用统计</b>
-            <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+<!-- SillyTavern/public/extensions/third-party/time-UI-1/ui.html -->
+<div id="daily-usage-tracker-container" class="daily-usage-tracker-container inline-drawer">
+    <div class="inline-drawer-toggle inline-drawer-header">
+        <b>每日使用统计 (北京时间)</b>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+        <div class="usage-controls">
+            <label for="usage-datepicker">选择日期:</label>
+            <input type="date" id="usage-datepicker" class="text_pole">
+            <button id="usage-refresh-button" class="menu_button fa-solid fa-arrows-rotate" title="刷新统计"></button>
+            <span id="usage-status" style="margin-left: 10px;"></span>
         </div>
-        <div class="inline-drawer-content">
-            <div class="daily-usage-header">
-                <div>
-                    <label for="usage-datepicker">选择日期:</label>
-                    <input type="date" id="usage-datepicker" class="text_pole">
-                </div>
-                <button id="usage-refresh-button" class="menu_button fa-solid fa-arrows-rotate" title="刷新"></button>
-            </div>
-            <div id="usage-display-area" class="daily-usage-display">
-                <p id="usage-loading-message">正在加载数据...</p>
-                <table id="usage-stats-table" class="daily-usage-table" style="display: none;">
-                    <thead>
-                        <tr>
-                            <th>角色/群组</th>
-                            <th>活跃时长</th>
-                            <th>你的消息</th>
-                            <th>你的字数</th>
-                            <th>AI 消息</th>
-                            <th>AI 字数</th>
-                            <th>总消息</th>
-                            <th>总字数</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- 数据行将动态插入 -->
-                    </tbody>
-                </table>
-            </div>
+        <div id="usage-display-area" class="usage-display-area">
+            <table id="usage-stats-table" class="usage-stats-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>角色/群组</th>
+                        <th>活跃时长</th>
+                        <th>你的消息</th>
+                        <th>你的字数</th>
+                        <th>对方消息</th>
+                        <th>对方字数</th>
+                        <th>总消息</th>
+                        <th>总字数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- 数据行将通过 JS 动态插入 -->
+                </tbody>
+                 <tfoot>
+                    <tr id="usage-totals-row" style="font-weight: bold;">
+                        <td>总计</td>
+                        <td data-col="time"></td>
+                        <td data-col="userMsg"></td>
+                        <td data-col="userWords"></td>
+                        <td data-col="aiMsg"></td>
+                        <td data-col="aiWords"></td>
+                        <td data-col="totalMsg"></td>
+                        <td data-col="totalWords"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            <p id="usage-no-data" style="display: none;">该日期无统计数据。</p>
         </div>
     </div>
 </div>
