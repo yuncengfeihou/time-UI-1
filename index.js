@@ -7,11 +7,11 @@ import {
     // event_types, // Use the camelCase version below
     messageFormatting,     // Not used here, but example import
     getRequestHeaders,     // CRUCIAL for API calls
-    getContext,            // CRUCIAL for getting context
 } from '../../../../script.js'; // Path relative to this file
 
 import {
     renderExtensionTemplateAsync,
+    getContext,            // CRUCIAL for getting context
     extension_settings,       // Use for UI settings if any, not core stats
 } from '../../../extensions.js'; // Path relative to this file
 
