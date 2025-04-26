@@ -35,7 +35,7 @@ function formatDuration(ms) {
     return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
-/**
+/*
  * 初始化或获取指定角色的本地累积统计对象
  * @param {string} charId
  * @returns {object}
