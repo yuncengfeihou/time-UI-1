@@ -375,7 +375,8 @@ jQuery(async () => {
     // --- Initialization Flow ---
     try {
         // 1. Load and inject the UI template
-        const uiHtml = await renderExtensionTemplateAsync(`third-party/${pluginId}`, 'ui');
+        const pluginFolderName = 'DailyUsageTrackerUI'; // 使用你的前端插件文件夹名
+        const uiHtml = await renderExtensionTemplateAsync(`third-party/${pluginFolderName}`, 'ui');
         // Inject into the standard extensions settings area
         $('#extensions_settings').append(uiHtml); // Or use '#translation_container' if that's the target in your ST version
         console.log(`[${pluginName}] UI injected into #extensions_settings.`);
