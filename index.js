@@ -6,6 +6,23 @@ jQuery(async () => {
     const serverApiBase = `/api/plugins/${pluginId}`;
     const TRACKING_INTERVAL = 15000; // 15秒钟跟踪一次
     
+    // 获取SillyTavern上下文
+    const context = getContext();
+    if (!context) {
+        console.error(`[${pluginName}] 无法获取SillyTavern上下文`);
+        return;
+    }
+    
+    // 从context中获取需要的组件
+    const { eventSource, extension_settings } = context;
+    const event_types = context.eventTypes || context.event_types; // 兼容不同版本
+    
+    // 检查必要组件
+    if (!eventSource || !event_types) {
+        console.error(`[${pluginName}] 缺少必要的SillyTavern组件`);
+        return;
+    }
+    
     // 插件状态变量
     let currentEntityId = null;
     let activeStartTime = null;
@@ -13,17 +30,11 @@ jQuery(async () => {
     let trackIntervalId = null;
     let entityNameMap = {}; // 实体ID到名称的映射
 
-    if (typeof window.extension_settings === 'undefined') {
-        window.extension_settings = {};
-    }
-    
     // 初始化插件设置
-    if (!window.extension_settings[pluginName]) {
-        window.extension_settings[pluginName] = {};
-        
-        // 如果 saveSettingsDebounced 函数存在，则保存设置
-        if (typeof window.saveSettingsDebounced === 'function') {
-            window.saveSettingsDebounced();
+    if (!extension_settings[pluginName]) {
+        extension_settings[pluginName] = {};
+        if (typeof context.saveSettingsDebounced === 'function') {
+            context.saveSettingsDebounced();
         }
     }
 
@@ -58,8 +69,8 @@ jQuery(async () => {
 
     // 辅助函数 - 获取当前实体ID
     function getCurrentEntityId() {
-        const context = getContext();
-        return context.groupId || context.characterId;
+        const ctx = getContext();
+        return ctx.groupId || ctx.characterId;
     }
 
     // API函数 - 发送跟踪数据到服务器
@@ -85,7 +96,7 @@ jQuery(async () => {
             const response = await fetch(`${serverApiBase}/track`, {
                 method: 'POST',
                 headers: {
-                    ...getRequestHeaders(),
+                    ...context.getRequestHeaders(),
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(payload)
@@ -182,7 +193,7 @@ jQuery(async () => {
 
             // 从服务器获取数据
             const response = await fetch(`${serverApiBase}/stats?date=${dateString}`, {
-                headers: getRequestHeaders()
+                headers: context.getRequestHeaders()
             });
 
             if (!response.ok) {
@@ -245,14 +256,14 @@ jQuery(async () => {
     // 事件处理器 - 新消息
     function handleNewMessage(messageId) {
         try {
-            const context = getContext();
+            const ctx = getContext();
             // 检查消息ID是否有效
-            if (messageId === undefined || messageId === null || !context.chat) {
+            if (messageId === undefined || messageId === null || !ctx.chat) {
                 return;
             }
             
             // 获取消息内容
-            const message = context.chat[messageId];
+            const message = ctx.chat[messageId];
             if (!message) return;
             
             // 获取当前实体ID
@@ -283,10 +294,47 @@ jQuery(async () => {
 
     // 渲染并注入UI
     try {
-        // 加载HTML模板
-        const htmlTemplate = await renderExtensionTemplateAsync(`third-party/${pluginName}`, 'ui');
+        // 直接使用HTML字符串代替模板加载
+        const htmlTemplate = `
+        <div id="daily-usage-plugin-container" class="daily-usage-container">
+            <div class="inline-drawer">
+                <div class="inline-drawer-toggle inline-drawer-header">
+                    <b>每日使用统计</b>
+                    <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+                </div>
+                <div class="inline-drawer-content">
+                    <div class="daily-usage-header">
+                        <div>
+                            <label for="usage-datepicker">选择日期:</label>
+                            <input type="date" id="usage-datepicker" class="text_pole">
+                        </div>
+                        <button id="usage-refresh-button" class="menu_button fa-solid fa-arrows-rotate" title="刷新"></button>
+                    </div>
+                    <div id="usage-display-area" class="daily-usage-display">
+                        <p id="usage-loading-message">正在加载数据...</p>
+                        <table id="usage-stats-table" class="daily-usage-table" style="display: none;">
+                            <thead>
+                                <tr>
+                                    <th>角色/群组</th>
+                                    <th>活跃时长</th>
+                                    <th>你的消息</th>
+                                    <th>你的字数</th>
+                                    <th>AI 消息</th>
+                                    <th>AI 字数</th>
+                                    <th>总消息</th>
+                                    <th>总字数</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- 数据行将动态插入 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>`;
         
-        // 将模板注入到扩展页面
+        // 将HTML直接注入到扩展页面
         $('#translation_container').append(htmlTemplate);
         
         // 预加载实体名称
@@ -313,7 +361,7 @@ jQuery(async () => {
         
         console.log(`[${pluginName}] UI初始化完成`);
     } catch (error) {
-        console.error(`[${pluginName}] 渲染UI模板失败:`, error);
+        console.error(`[${pluginName}] 渲染UI失败:`, error);
     }
 
     // 添加事件监听
