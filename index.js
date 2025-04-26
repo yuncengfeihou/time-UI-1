@@ -2,7 +2,7 @@ import { getContext, /*...*/ } from '../../../../script.js';
 import { eventSource, event_types } from '../../../../script.js';
 import { renderExtensionTemplateAsync } from "../../../script.js";
 
-const pluginName = 'your-stats-plugin';
+const pluginName = 'time-UI-1';
 const pluginId = 'your-stats-plugin-id'; // *** 必须与服务器插件 ID 一致 ***
 const serverApiBase = `/api/plugins/${pluginId}`;
 
