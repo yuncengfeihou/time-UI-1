@@ -1,11 +1,11 @@
 {
-    "display_name": "聊天统计1.4",
-    "loading_order": 4, 
+    "display_name": "每日使用追踪器",
+    "loading_order": 4,
     "requires": [],
     "optional": [],
     "js": "index.js",
     "css": "style.css",
-    "author": "you",
+    "author": "Your Name",
     "version": "1.0.0",
     "homePage": ""
 }
