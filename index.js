@@ -1,463 +1,342 @@
-// Import necessary functions from SillyTavern scripts
-// Adjust paths based on your SillyTavern version if needed
-import {
-    saveSettingsDebounced, // Although not used directly for stats, good practice to import if needed
-    getCurrentChatId,      // May not be needed if getContext provides enough
-    eventSource,
-    // event_types, // Use the camelCase version below
-    messageFormatting,     // Not used here, but example import
-    getRequestHeaders,     // CRUCIAL for API calls
-} from '../../../../script.js'; // Path relative to this file
-
-import {
-    renderExtensionTemplateAsync,
-    getContext,            // CRUCIAL for getting context
-    extension_settings,       // Use for UI settings if any, not core stats
-} from '../../../extensions.js'; // Path relative to this file
-
-import {
-    Popup,                 // For potential future popups
-    POPUP_TYPE,
-    callGenericPopup,
-    POPUP_RESULT,
-} from '../../../popup.js';     // Path relative to this file
-
-import {
-    uuidv4,                // If needed for unique IDs
-    timestampToMoment,     // For date/time display formatting
-    // Add other utils if needed
-} from '../../../utils.js';      // Path relative to this file
-
-// Use the modern 'eventTypes' from getContext() if available, otherwise fall back
-const eventTypes = window.SillyTavern.getContext?.().eventTypes ?? window.event_types;
-
-// Polyfill for dayjs if not globally available (basic YYYY-MM-DD)
-const getClientBeijingDateString = () => {
-    try {
-        // Attempt to use globally available dayjs if ST provides it
-        if (window.dayjs && window.dayjs.tz) {
-             return window.dayjs().tz("Asia/Shanghai").format('YYYY-MM-DD');
-        }
-    } catch (e) {
-       console.warn('[time-UI-1] Failed to use global dayjs. Falling back to basic Date object.');
-    }
-    // Fallback using basic Date object (less reliable for timezones but works for date part)
-    const now = new Date();
-    const offset = 8 * 60; // Beijing is UTC+8
-    const beijingTime = new Date(now.getTime() + (offset + now.getTimezoneOffset()) * 60000);
-    const year = beijingTime.getFullYear();
-    const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
-    const day = String(beijingTime.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
-
-
+// SillyTavern 前端插件 - 每日使用统计
 jQuery(async () => {
-    const pluginName = 'time-UI-1'; // For logging
-    const pluginId = 'daily-usage-tracker';   // MUST match server plugin ID
+    // 插件基本配置
+    const pluginName = 'time-UI-1';
+    const pluginId = 'daily-usage-tracker';
     const serverApiBase = `/api/plugins/${pluginId}`;
-    const TRACKING_INTERVAL_MS = 15 * 1000; // Send time update every 15 seconds
+    const TRACKING_INTERVAL = 15000; // 15秒钟跟踪一次
+    
+    // 插件状态变量
+    let currentEntityId = null;
+    let activeStartTime = null;
+    let isWindowFocused = true; // 默认窗口获得焦点
+    let trackIntervalId = null;
+    let entityNameMap = {}; // 实体ID到名称的映射
 
-    console.log(`[${pluginName}] Initializing...`);
-
-    // --- State Variables ---
-    let currentEntityId = null; // characterId or groupId
-    let activeStartTime = null; // Timestamp when focus gained / entity changed while focused
-    let isWindowFocused = document.hasFocus(); // Initial focus state
-    let trackIntervalId = null; // ID for the setInterval timer
-    let entityNameMap = {}; // Cache for { id: name }
-
-    // --- Helper Functions ---
-
-    /** Simple word count (adjust regex as needed for different languages) */
-    function countWords(text) {
-        if (!text || typeof text !== 'string') return 0;
-        // Basic word count: split by spaces and common punctuation, filter empty strings.
-        // Consider more sophisticated tokenization for CJK languages if needed.
-        const words = text.match(/\b(\w+)\b/g); // Matches sequences of word characters
-        return words ? words.length : 0;
+    // 初始化插件设置
+    if (!extension_settings[pluginName]) {
+        extension_settings[pluginName] = {};
+        saveSettingsDebounced();
     }
 
-    /** Format milliseconds to HH:MM:SS or MM:SS */
+    // 辅助函数 - 获取北京时间日期字符串 (YYYY-MM-DD)
+    function getBeijingDateString() {
+        return dayjs().tz('Asia/Shanghai').format('YYYY-MM-DD');
+    }
+
+    // 辅助函数 - 格式化时长
     function formatDuration(ms) {
-        if (typeof ms !== 'number' || ms < 0) return '00:00';
-        const totalSeconds = Math.floor(ms / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-
-        const paddedMinutes = String(minutes).padStart(2, '0');
-        const paddedSeconds = String(seconds).padStart(2, '0');
-
-        if (hours > 0) {
-            const paddedHours = String(hours).padStart(2, '0');
-            return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
-        } else {
-            return `${paddedMinutes}:${paddedSeconds}`;
-        }
+        const seconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        
+        return `${hours}小时 ${minutes % 60}分钟 ${seconds % 60}秒`;
     }
 
-    /** Get current character or group ID from context */
-    function getCurrentContextEntityId() {
+    // 辅助函数 - 统计字数
+    function countWords(text) {
+        if (!text) return 0;
+        
+        // 简单的字数统计 - 中文按字符计算，英文按空格分词
+        // 首先去除所有HTML标签
+        const cleanText = text.replace(/<[^>]*>/g, '');
+        
+        // 英文单词 + 中文/日文/韩文字符
+        const wordCount = cleanText.trim().split(/\s+/).filter(word => word.length > 0).length +
+                         (cleanText.match(/[\u4e00-\u9fff\u3040-\u30ff\u3130-\u318f\uac00-\ud7af]/g) || []).length;
+        
+        return wordCount;
+    }
+
+    // 辅助函数 - 获取当前实体ID
+    function getCurrentEntityId() {
+        const context = getContext();
+        return context.groupId || context.characterId;
+    }
+
+    // API函数 - 发送跟踪数据到服务器
+    async function sendTrackingData({ timeMs = 0, msgInc = 0, wordInc = 0, isUser = false } = {}) {
         try {
-            const context = getContext();
-            // Prefer group ID if it exists (indicates a group chat)
-            return context?.groupId || context?.characterId || null;
-        } catch (error) {
-             console.error(`[${pluginName}] Error getting context:`, error);
-             return null;
-        }
-    }
-
-     /** Preload character and group names for display */
-    async function preloadEntityNames() {
-        entityNameMap = {}; // Reset map
-        try {
-            const context = getContext();
-            // Access characters and groups directly from context (modern ST)
-            const characters = context?.characters ?? [];
-            const groups = context?.groups ?? [];
-
-             characters.forEach(char => {
-                if (char.id !== undefined && char.name) { // Use 'id' if available, fallback to index? (check ST structure)
-                   entityNameMap[char.id ?? characters.indexOf(char)] = char.name;
-                } else if (char.name && char.file_name) { // Fallback using file_name based index? Needs verification
-                    const charIndex = characters.findIndex(c => c.file_name === char.file_name);
-                     if(charIndex !== -1) entityNameMap[charIndex] = char.name;
-                }
-             });
-
-             groups.forEach(group => {
-                if (group.id && group.name) {
-                    entityNameMap[group.id] = group.name;
-                }
-             });
-             console.debug(`[${pluginName}] Preloaded ${Object.keys(entityNameMap).length} entity names.`);
-        } catch (error) {
-            console.error(`[${pluginName}] Error preloading entity names:`, error);
-            // Try to get names from older global variables if context fails? (Less likely needed now)
-            // if (window.characters && Array.isArray(window.characters)) { ... }
-            // if (window.groups && Array.isArray(window.groups)) { ... }
-        }
-    }
-
-
-    /** Get entity name from cache, fallback to ID */
-    function getEntityName(id) {
-        return entityNameMap[id] || `ID: ${id}` || '未知实体';
-    }
-
-    // --- API Communication ---
-
-    /** Send tracking data increment to the backend */
-    async function sendTrackingData({ timeMs, msgInc, wordInc, isUser }) {
-        const entityId = getCurrentContextEntityId();
-        if (!entityId) {
-            // console.warn(`[${pluginName}] Cannot send tracking data: No active entityId.`);
-            return; // Don't send if no character/group is active
-        }
-
-        const payload = { entityId };
-        let hasData = false;
-
-        if (typeof timeMs === 'number' && timeMs > 0) {
-            payload.timeIncrementMs = Math.round(timeMs); // Send integer ms
-            hasData = true;
-        }
-        if (typeof msgInc === 'number' && msgInc > 0) {
-            payload.messageIncrement = msgInc;
-            payload.wordIncrement = typeof wordInc === 'number' ? wordInc : 0;
-            payload.isUser = !!isUser; // Ensure boolean
-            hasData = true;
-        }
-
-        if (!hasData) return; // Don't send empty requests
-
-        // console.debug(`[${pluginName}] Sending tracking data:`, payload); // Debug log
-
-        try {
-            const response = await fetch(`${serverApiBase}/track`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getRequestHeaders(), // Include necessary ST headers (CSRF etc.)
-                },
-                body: JSON.stringify(payload),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: `HTTP Error: ${response.status}` }));
-                console.error(`[${pluginName}] Failed to send tracking data: ${response.status}`, errorData.error || '');
-            }
-        } catch (error) {
-            console.error(`[${pluginName}] Network error sending tracking data:`, error);
-        }
-    }
-
-    /** Load stats for a specific date and update the display table */
-    async function loadAndDisplayStats(dateString) {
-        const $loadingMessage = $('#usage-loading-message');
-        const $statsTable = $('#usage-stats-table');
-        const $statsTableBody = $statsTable.find('tbody');
-
-        $loadingMessage.text('正在加载...').show();
-        $statsTable.hide();
-        $statsTableBody.empty(); // Clear previous data
-
-        try {
-            // Ensure names are loaded before displaying stats
-            await preloadEntityNames();
-
-            const response = await fetch(`${serverApiBase}/stats?date=${dateString}`, {
-                method: 'GET',
-                headers: {
-                    ...getRequestHeaders(),
-                },
-            });
-
-            if (!response.ok) {
-                 const errorData = await response.json().catch(() => ({ error: `HTTP Error: ${response.status}` }));
-                throw new Error(errorData.error || `Failed to load stats: ${response.status}`);
-            }
-
-            const statsData = await response.json();
-            // console.debug(`[${pluginName}] Received stats for ${dateString}:`, statsData); // Debug log
-
-            const entityIds = Object.keys(statsData);
-
-            if (entityIds.length === 0) {
-                $loadingMessage.text(`日期 ${dateString} 没有统计数据。`).show();
+            // 实时获取当前实体ID
+            const entityId = getCurrentEntityId();
+            if (!entityId) {
+                console.log(`[${pluginName}] 未找到有效的实体ID，跳过数据发送`);
                 return;
             }
 
-            // Sort entities by total time descending (optional)
-            entityIds.sort((a, b) => (statsData[b]?.totalTimeMs || 0) - (statsData[a]?.totalTimeMs || 0));
+            // 构建要发送的数据
+            const payload = {
+                entityId,
+                timeIncrementMs: timeMs,
+                messageIncrement: msgInc,
+                wordIncrement: wordInc,
+                isUser
+            };
 
-            entityIds.forEach(id => {
-                const stats = statsData[id];
-                const name = getEntityName(id);
-                const totalMsg = (stats.userMsgCount || 0) + (stats.aiMsgCount || 0);
-                const totalWords = (stats.userWordCount || 0) + (stats.aiWordCount || 0);
-
-                const rowHtml = `
-                    <tr>
-                        <td>${name}</td>
-                        <td>${formatDuration(stats.totalTimeMs || 0)}</td>
-                        <td>${stats.userMsgCount || 0}</td>
-                        <td>${stats.userWordCount || 0}</td>
-                        <td>${stats.aiMsgCount || 0}</td>
-                        <td>${stats.aiWordCount || 0}</td>
-                        <td>${totalMsg}</td>
-                        <td>${totalWords}</td>
-                    </tr>
-                `;
-                $statsTableBody.append(rowHtml);
+            // 发送数据到服务器
+            const response = await fetch(`${serverApiBase}/track`, {
+                method: 'POST',
+                headers: {
+                    ...getRequestHeaders(),
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
             });
 
-            $loadingMessage.hide();
-            $statsTable.show();
-
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: '未知错误' }));
+                console.error(`[${pluginName}] 发送跟踪数据失败:`, errorData.error);
+            }
         } catch (error) {
-            console.error(`[${pluginName}] Error loading or displaying stats for ${dateString}:`, error);
-            $loadingMessage.text(`加载统计数据失败: ${error.message}`).show();
-             $statsTable.hide();
+            console.error(`[${pluginName}] 发送跟踪数据异常:`, error);
         }
     }
 
-    // --- Time Tracking Logic ---
-
-    /** Calculates elapsed time since last start and sends it */
+    // 时间跟踪函数 - 处理并发送时间增量
     function processAndSendTimeIncrement() {
-        if (!isWindowFocused || !activeStartTime || !getCurrentContextEntityId()) {
-            // console.debug(`[${pluginName}] Skipping time send: Focus=${isWindowFocused}, StartTime=${activeStartTime}, Entity=${getCurrentContextEntityId()}`);
-            activeStartTime = null; // Reset start time if conditions not met
-            return;
-        }
-
+        if (!isWindowFocused || !activeStartTime) return;
+        
+        const entityId = getCurrentEntityId();
+        if (!entityId) return;
+        
         const now = Date.now();
         const durationMs = now - activeStartTime;
-
-        if (durationMs > 100) { // Only send if duration is meaningful (e.g., > 100ms)
+        
+        if (durationMs > 0) {
             sendTrackingData({ timeMs: durationMs });
-            // console.debug(`[${pluginName}] Sent time increment: ${durationMs}ms`);
+            // 重置开始时间以准备下一个增量
+            activeStartTime = now;
         }
-
-        // CRITICAL: Reset start time for the next interval/event
-        activeStartTime = now;
     }
 
-    /** Starts the periodic time tracking interval */
+    // 开始跟踪时间间隔
     function startTrackingInterval() {
-        stopTrackingInterval(); // Clear any existing interval first
-
-        const entityId = getCurrentContextEntityId();
-        if (!entityId) {
-            // console.debug(`[${pluginName}] Not starting tracker: No active entity.`);
-            return; // Don't start if no entity
+        // 先停止已有的跟踪
+        stopTrackingInterval();
+        
+        // 获取当前实体ID
+        currentEntityId = getCurrentEntityId();
+        if (!currentEntityId) {
+            console.log(`[${pluginName}] 未找到有效的实体ID，不启动跟踪`);
+            return;
         }
-
-        // console.debug(`[${pluginName}] Starting tracking interval for entity ${entityId}. Focused: ${isWindowFocused}`);
-        if (isWindowFocused) {
-            activeStartTime = Date.now(); // Set start time only if focused
-        } else {
-            activeStartTime = null;
-        }
-
-        trackIntervalId = setInterval(processAndSendTimeIncrement, TRACKING_INTERVAL_MS);
+        
+        // 设置开始时间
+        activeStartTime = isWindowFocused ? Date.now() : null;
+        
+        // 启动定时器
+        trackIntervalId = setInterval(processAndSendTimeIncrement, TRACKING_INTERVAL);
+        console.log(`[${pluginName}] 已开始跟踪 ${currentEntityId}`);
     }
 
-    /** Stops the time tracking interval and sends the final elapsed time */
+    // 停止跟踪时间间隔
     function stopTrackingInterval() {
         if (trackIntervalId) {
             clearInterval(trackIntervalId);
-            trackIntervalId = null;
-            // console.debug(`[${pluginName}] Stopped tracking interval.`);
-            // Send any remaining time since the last interval tick or focus gain
+            // 处理最后一段时长
             processAndSendTimeIncrement();
+            trackIntervalId = null;
         }
-         // Clear start time regardless of whether interval was running
-         activeStartTime = null;
+        activeStartTime = null;
     }
 
-    // --- Event Handlers ---
+    // 加载实体名称 - 角色和群组
+    function preloadEntityNames() {
+        try {
+            // 获取角色列表
+            const characters = window.characters || [];
+            characters.forEach(char => {
+                if (char.item && char.item.avatar_url) {
+                    entityNameMap[char.item.avatar_url] = char.item.name;
+                }
+            });
+            
+            // 获取群组列表
+            const groups = window.groups || [];
+            groups.forEach(group => {
+                if (group.id) {
+                    entityNameMap[group.id] = group.name;
+                }
+            });
+            
+            console.log(`[${pluginName}] 已加载 ${Object.keys(entityNameMap).length} 个实体名称`);
+        } catch (error) {
+            console.error(`[${pluginName}] 加载实体名称失败:`, error);
+        }
+    }
 
-    /** Handles switching characters or groups */
+    // 加载并显示统计数据
+    async function loadAndDisplayStats(dateString = getBeijingDateString()) {
+        try {
+            // 显示加载消息
+            $('#usage-loading-message').show();
+            $('#usage-stats-table').hide();
+
+            // 从服务器获取数据
+            const response = await fetch(`${serverApiBase}/stats?date=${dateString}`, {
+                headers: getRequestHeaders()
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: '未知错误' }));
+                throw new Error(errorData.error || `服务器错误 (${response.status})`);
+            }
+
+            const statsData = await response.json();
+            
+            // 检查数据是否为空
+            if (Object.keys(statsData).length === 0) {
+                $('#usage-loading-message').text(`${dateString} 没有统计数据`);
+                return;
+            }
+
+            // 预加载实体名称（如果需要）
+            if (Object.keys(entityNameMap).length === 0) {
+                preloadEntityNames();
+            }
+
+            // 清空并填充表格
+            const tableBody = $('#usage-stats-table tbody');
+            tableBody.empty();
+            
+            // 格式化并显示数据
+            Object.entries(statsData).forEach(([entityId, data]) => {
+                const entityName = entityNameMap[entityId] || entityId;
+                const totalMessages = data.userMsgCount + data.aiMsgCount;
+                const totalWords = data.userWordCount + data.aiWordCount;
+                
+                const row = $('<tr></tr>');
+                row.append(`<td>${entityName}</td>`);
+                row.append(`<td>${formatDuration(data.totalTimeMs)}</td>`);
+                row.append(`<td>${data.userMsgCount}</td>`);
+                row.append(`<td>${data.userWordCount}</td>`);
+                row.append(`<td>${data.aiMsgCount}</td>`);
+                row.append(`<td>${data.aiWordCount}</td>`);
+                row.append(`<td>${totalMessages}</td>`);
+                row.append(`<td>${totalWords}</td>`);
+                
+                tableBody.append(row);
+            });
+            
+            // 显示表格，隐藏加载消息
+            $('#usage-loading-message').hide();
+            $('#usage-stats-table').show();
+            
+        } catch (error) {
+            console.error(`[${pluginName}] 加载统计数据失败:`, error);
+            $('#usage-loading-message').text(`加载失败: ${error.message}`);
+        }
+    }
+
+    // 事件处理器 - 实体变更
     function handleEntityChange() {
-        const newEntityId = getCurrentContextEntityId();
-        // console.debug(`[${pluginName}] Entity changed. Old: ${currentEntityId}, New: ${newEntityId}`);
-
-        // Stop tracking for the old entity (sends final time segment)
         stopTrackingInterval();
-
-        currentEntityId = newEntityId;
-
-        // Start tracking for the new entity (if one exists)
-        if (currentEntityId) {
-            startTrackingInterval();
-        }
+        startTrackingInterval();
     }
 
-    /** Handles new messages (sent or received) */
-    function handleNewMessage(eventData) {
-        // eventData might be just messageId or an object depending on ST version/event
-        // We need to reliably get the message details. getContext() is usually the way.
+    // 事件处理器 - 新消息
+    function handleNewMessage(messageId) {
         try {
             const context = getContext();
-            if (!context || !context.chat || context.chat.length === 0) return;
-
-            // Find the latest message, assuming it triggered the event.
-            // This might need adjustment if events aren't always for the last message.
-            // A more robust approach might involve checking messageId if provided by the event.
-            const latestMessage = context.chat[context.chat.length - 1];
-            if (!latestMessage) return;
-
-
-            const entityId = getCurrentContextEntityId();
-            if (!entityId) return; // Should not happen if message is added, but check anyway
-
-            const wordCount = countWords(latestMessage.mes);
-            const isUser = latestMessage.is_user === true;
-
-            // console.debug(`[${pluginName}] New message detected. User: ${isUser}, Words: ${wordCount}, Entity: ${entityId}`);
-            sendTrackingData({ msgInc: 1, wordInc: wordCount, isUser: isUser });
-
-            // Optional: Reset active timer start on new message for potentially higher accuracy,
-            // as message sending/receiving implies activity.
-            if (isWindowFocused) {
-                 activeStartTime = Date.now();
+            // 检查消息ID是否有效
+            if (messageId === undefined || messageId === null || !context.chat) {
+                return;
             }
-
-        } catch (error) {
-            console.error(`[${pluginName}] Error handling new message:`, error);
-        }
-    }
-
-    // --- Initialization Flow ---
-    try {
-        // 1. Load and inject the UI template
-        const pluginFolderName = 'time-UI-1'; // 使用你的前端插件文件夹名
-        const uiHtml = await renderExtensionTemplateAsync(`third-party/${pluginFolderName}`, 'ui');
-        // Inject into the standard extensions settings area
-        $('#extensions_settings').append(uiHtml); // Or use '#translation_container' if that's the target in your ST version
-        console.log(`[${pluginName}] UI injected into #extensions_settings.`);
-
-        // 2. Preload names initially
-        await preloadEntityNames();
-
-        // 3. Set up date picker and load initial stats for today
-        const $datepicker = $('#usage-datepicker');
-        const todayBeijing = getClientBeijingDateString();
-        $datepicker.val(todayBeijing); // Set default to today
-        loadAndDisplayStats(todayBeijing); // Load today's stats
-
-        // 4. Bind UI event listeners
-        $datepicker.on('change', function() {
-            loadAndDisplayStats($(this).val());
-        });
-        $('#usage-refresh-button').on('click', () => {
-            loadAndDisplayStats($datepicker.val());
-        });
-
-        // 5. Listen to SillyTavern core events for context changes
-        // Use CHAT_CHANGED as a general indicator for potential character/group swaps
-        eventSource.on(eventTypes.CHAT_CHANGED, handleEntityChange);
-        // Use CHARACTER_LOADED and GROUP_LOADED if CHAT_CHANGED isn't reliable enough
-        // eventSource.on(eventTypes.CHARACTER_LOADED, handleEntityChange); // Uncomment if needed
-        // eventSource.on(eventTypes.GROUP_LOADED, handleEntityChange);     // Uncomment if needed
-
-        // Listen for new messages
-        eventSource.on(eventTypes.MESSAGE_SENT, handleNewMessage);
-        eventSource.on(eventTypes.MESSAGE_RECEIVED, handleNewMessage); // Assumes AI messages trigger this
-
-        // 6. Listen to window focus/blur events for time tracking
-        $(window).on('focus', () => {
-            if (!isWindowFocused) {
-                // console.debug(`[${pluginName}] Window gained focus.`);
-                isWindowFocused = true;
-                // Restart timer, setting the start time NOW
+            
+            // 获取消息内容
+            const message = context.chat[messageId];
+            if (!message) return;
+            
+            // 获取当前实体ID
+            const entityId = getCurrentEntityId();
+            if (!entityId) return;
+            
+            // 统计字数
+            const wordCount = countWords(message.mes);
+            
+            // 确定消息来源
+            const isUser = message.is_user === true;
+            
+            // 发送数据到服务器
+            sendTrackingData({
+                msgInc: 1,
+                wordInc: wordCount,
+                isUser: isUser
+            });
+            
+            // 如果窗口有焦点，重置活跃开始时间（提高跟踪精度）
+            if (isWindowFocused) {
                 activeStartTime = Date.now();
-                startTrackingInterval(); // Ensures interval is running if entity is selected
             }
-        });
-        $(window).on('blur', () => {
-            if (isWindowFocused) {
-                // console.debug(`[${pluginName}] Window lost focus.`);
-                isWindowFocused = false;
-                // Process the final time segment immediately
-                processAndSendTimeIncrement();
-                // Stop the interval, but keep entityId context
-                 activeStartTime = null; // Clear start time as no longer focused
-                 // No need to call stopTrackingInterval here, processAndSend handles the last bit,
-                 // and interval will naturally not send when focus is lost.
-                 // If you WANT the interval to stop completely on blur, call stopTrackingInterval() here.
-            }
-        });
-
-        // 7. Listen for page unload (best effort to save last bit of time)
-        $(window).on('beforeunload', () => {
-            // console.debug(`[${pluginName}] Window unloading.`);
-            // Send the very last time increment synchronously if possible (might not always work)
-            // Note: fetch keepalive might be needed for more reliability here, but simple send first
-             processAndSendTimeIncrement();
-             // No need to stop interval explicitly, page is closing
-        });
-
-        // 8. Initial entity check and start tracking
-        currentEntityId = getCurrentContextEntityId();
-        if (currentEntityId) {
-            startTrackingInterval();
-             console.log(`[${pluginName}] Initial tracking started for entity: ${currentEntityId}`);
-        } else {
-             console.log(`[${pluginName}] No active entity on load. Waiting for entity change.`);
+        } catch (error) {
+            console.error(`[${pluginName}] 处理新消息失败:`, error);
         }
-
-        console.log(`[${pluginName}] Initialization complete.`);
-
-    } catch (error) {
-        console.error(`[${pluginName}] Initialization failed:`, error);
-        // Optionally display an error message to the user in the UI
-         $('#daily-usage-tracker-container .inline-drawer-content')
-             .empty()
-             .append('<p style="color: red; padding: 10px;">插件初始化失败，请检查控制台日志。</p>');
     }
+
+    // 渲染并注入UI
+    try {
+        // 加载HTML模板
+        const htmlTemplate = await renderExtensionTemplateAsync(`third-party/${pluginName}`, 'ui');
+        
+        // 将模板注入到扩展页面
+        $('#translation_container').append(htmlTemplate);
+        
+        // 预加载实体名称
+        preloadEntityNames();
+        
+        // 设置日期选择器默认值为今天（北京时间）
+        const today = getBeijingDateString();
+        $('#usage-datepicker').val(today);
+        
+        // 初始加载今天的数据
+        loadAndDisplayStats(today);
+        
+        // 绑定日期选择器变更事件
+        $('#usage-datepicker').on('change', function() {
+            const selectedDate = $(this).val();
+            loadAndDisplayStats(selectedDate);
+        });
+        
+        // 绑定刷新按钮点击事件
+        $('#usage-refresh-button').on('click', function() {
+            const selectedDate = $('#usage-datepicker').val();
+            loadAndDisplayStats(selectedDate);
+        });
+        
+        console.log(`[${pluginName}] UI初始化完成`);
+    } catch (error) {
+        console.error(`[${pluginName}] 渲染UI模板失败:`, error);
+    }
+
+    // 添加事件监听
+    // 角色/群组切换事件
+    eventSource.on(event_types.CHARACTER_LOADED, handleEntityChange);
+    eventSource.on(event_types.GROUP_LOADED, handleEntityChange);
+    eventSource.on(event_types.CHAT_CHANGED, handleEntityChange);
+    
+    // 消息事件
+    eventSource.on(event_types.MESSAGE_SENT, handleNewMessage);
+    eventSource.on(event_types.MESSAGE_RECEIVED, handleNewMessage);
+    
+    // 窗口焦点事件
+    $(window).on('focus', function() {
+        isWindowFocused = true;
+        activeStartTime = Date.now();
+    });
+    
+    $(window).on('blur', function() {
+        isWindowFocused = false;
+        processAndSendTimeIncrement();
+        activeStartTime = null;
+    });
+    
+    // 页面卸载前事件 - 尽力而为，不一定能捕获所有情况
+    $(window).on('beforeunload', function() {
+        stopTrackingInterval();
+    });
+    
+    // 初始化跟踪
+    handleEntityChange();
+    
+    console.log(`[${pluginName}] 插件初始化完成`);
 });
