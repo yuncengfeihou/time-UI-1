@@ -1,6 +1,6 @@
 {
     "display_name": "聊天统计1.1",
-    "loading_order": 10, 
+    "loading_order": 4, 
     "requires": [],
     "optional": [],
     "js": "index.js",
